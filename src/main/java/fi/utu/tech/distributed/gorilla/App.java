@@ -1,7 +1,7 @@
 package fi.utu.tech.distributed.gorilla;
 
 import fi.utu.tech.distributed.gorilla.logic.GameMode;
-import fi.utu.tech.distributed.gorilla.logic.GorillaLogic;
+import fi.utu.tech.distributed.gorilla.logic.GorillaMultiplayerLogic;
 import fi.utu.tech.oomkit.app.OOMApp;
 import fi.utu.tech.oomkit.controls.Button;
 import fi.utu.tech.oomkit.controls.NodeList;
@@ -38,7 +38,7 @@ import javafx.stage.Stage;
  *   instead).
  */
 public class App extends OOMApp {
-    final static GorillaLogic appLogic = new GorillaLogic();
+    final static GorillaMultiplayerLogic appLogic = new GorillaMultiplayerLogic();
 
     @Override
     protected Window generateMainWindow(Stage stage, String appName, double width, double height) {

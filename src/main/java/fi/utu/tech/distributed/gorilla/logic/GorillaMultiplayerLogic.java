@@ -1,5 +1,7 @@
 package fi.utu.tech.distributed.gorilla.logic;
 
+import fi.utu.tech.distributed.gorilla.mesh.Mesh;
+import fi.utu.tech.distributed.gorilla.mesh.MeshMessage;
 import fi.utu.tech.distributed.gorilla.views.MainCanvas;
 import fi.utu.tech.distributed.gorilla.views.Views;
 import fi.utu.tech.oomkit.app.AppConfiguration;
@@ -7,9 +9,12 @@ import fi.utu.tech.oomkit.app.GraphicalAppLogic;
 import fi.utu.tech.oomkit.canvas.Canvas;
 import fi.utu.tech.oomkit.util.Console;
 import fi.utu.tech.oomkit.windows.Window;
-import javafx.application.Application;
 import javafx.application.Platform;
 
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.SocketAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -20,7 +25,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  * TODO: Extend this for GorillaMultiplayerLogic and make Overrides there
  * Alternatively this class can be also modified
  */
-public class GorillaLogic implements GraphicalAppLogic {
+public class GorillaMultiplayerLogic implements GraphicalAppLogic {
     private Console console;
     private final MainCanvas mainCanvas = new MainCanvas();
     public Views views;
@@ -31,6 +36,8 @@ public class GorillaLogic implements GraphicalAppLogic {
     protected String myName = "Mää";
     protected final int gameSeed = 1;
     protected final int maxPlayers = 2;
+
+    private Mesh server;
 
     // in case the game runs too slow:
 
@@ -87,19 +94,19 @@ public class GorillaLogic implements GraphicalAppLogic {
                 setMode(GameMode.Menu);
                 break;
             case Menu:
-                if (k == Key.Up) {
+                if (k == Key.Backspace) {
                     if (selectedMenuItem > 0) selectedMenuItem--;
                     else selectedMenuItem = 2;
                     views.setSelectedMenuItem(selectedMenuItem);
                     return;
                 }
-                if (k == Key.Down) {
+                if (k == Key.Alt) {
                     if (selectedMenuItem < 2) selectedMenuItem++;
                     else selectedMenuItem = 0;
                     views.setSelectedMenuItem(selectedMenuItem);
                     return;
                 }
-                if (k == Key.Enter) {
+                if (k == Key.Ctrl) {
                     switch (selectedMenuItem) {
                         case 0:
                             // quit active game
@@ -128,7 +135,7 @@ public class GorillaLogic implements GraphicalAppLogic {
      * Reads the commands given by user in GUI and passes them into
      * command parser (parseCommandLine())
      */
-    private void handleConsoleInput() {
+    private void handleConsoleInput() throws IOException, ClassNotFoundException {
         if (console != null && console.inputQueue().peek() != null) {
             parseCommandLine(console.inputQueue().poll());
         }
@@ -138,19 +145,19 @@ public class GorillaLogic implements GraphicalAppLogic {
      * Called after the OOMkit has initialized and a window is fully visible and usable.
      * This method is the first one to be called on this class
      * @param window Oomkit application window (no need to modify)
-     * @param parameters Command line parameters given, can be used for defining port and server address to connect
+     *  Command line parameters given, can be used for defining port and server address to connect
      */
-    //@Override
-    public void initialize(Window window, Application.Parameters parameters) {
+    @Override
+    public void initialize(Window window) {
         // To --port=1234 
         // IDEA: Run -> Edit configurations -> Program arguments
         // Eclipse (Ran as Java Application): Run -> Run configuration... -> Java Application -> Main (varies) -> Arguments -> Program arguments
 
         // Start server on the port given as a command line parameter or 1234
-        startServer(parameters.getNamed().getOrDefault("port", "1234"));
+        //startServer("1235");
 
         // Connect to address given as a command line parameter "server" (default: localhost) on port given (default: 1234)
-        connectToServer(parameters.getNamed().getOrDefault("server", "localhost"), parameters.getNamed().getOrDefault("port", "1234"));
+        //connectToServer("localhost","1234");
 
         views = new Views(mainCanvas, lowendMachine, synkistely, configuration().tickDuration, new Random().nextLong());
         this.console = window.console();
@@ -204,7 +211,11 @@ public class GorillaLogic implements GraphicalAppLogic {
      */
     @Override
     public void tick() {
-        handleConsoleInput();
+        try {
+            handleConsoleInput();
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
         toggleGameMode();
         views.redraw();
     }
@@ -227,8 +238,11 @@ public class GorillaLogic implements GraphicalAppLogic {
      * Start the mesh server on the specified port
      * @param port The port the mesh should listen to for new nodes
      */
-    protected void startServer(String port) {
+    protected void startServer(String port) throws IOException {
         System.out.println("Starting server at port " + port);
+        server = new Mesh(Integer.parseInt(port));
+        server.start();
+
         // ...or at least somebody should be
     }
 
@@ -237,8 +251,10 @@ public class GorillaLogic implements GraphicalAppLogic {
      * @param address The IP address of the mesh node to connect to
      * @param port The listening port of the mesh node to connect to
      */
-    protected void connectToServer(String address, String port) {
+    protected void connectToServer(String address, String port) throws IOException {
         System.out.printf("Connecting to server at %s", address, port);
+        System.out.println("");
+        server.connect(address, Integer.parseInt(port));
         // ...or at least somebody should be
     }
 
@@ -278,8 +294,8 @@ public class GorillaLogic implements GraphicalAppLogic {
      * Handles message sending. Usually fired by "say" command
      * @param msg Chat message object containing the message and other information
      */
-    protected void handleChatMessage(ChatMessage msg) {
-        System.out.printf("Sinä sanot: %s%n", msg.contents);
+    protected void handleChatMessage(MeshMessage msg) {
+        server.broadcast(msg);
     }
 
     /**
@@ -304,13 +320,14 @@ public class GorillaLogic implements GraphicalAppLogic {
      */
     protected void handleNameChange(String newName) {
         myName = newName;
+        System.out.println("Nimesi on nyt " + newName);
     }
 
     /**
      * Parses the game command prompt and fires appropriate handlers
      * @param cmd Unparsed command to be parsed
      */
-    private void parseCommandLine(String cmd) {
+    private void parseCommandLine(String cmd) throws IOException, ClassNotFoundException {
         if (cmd.contains(" ")) {
             String rest = cmd.substring(cmd.split(" ")[0].length() + 1);
             switch (cmd.split(" ")[0]) {
@@ -320,12 +337,15 @@ public class GorillaLogic implements GraphicalAppLogic {
                     Platform.exit();
                     break;
                 case "name":
+                    if (cmd.equals("name")){
+                        System.out.println("Nimesi on " + myName);
+                    }
                     handleNameChange(rest);
                     break;
                 case "s":
                 case "chat":
                 case "say":
-                    handleChatMessage(new ChatMessage(myName, "all", rest));
+                    handleChatMessage(new MeshMessage(myName, rest));
                     break;
                 case "a":
                 case "k":
@@ -358,6 +378,12 @@ public class GorillaLogic implements GraphicalAppLogic {
                     } catch (IllegalArgumentException e) {
                         System.out.println(e.getMessage());
                     }
+                    break;
+                case "connect":
+                    connectToServer(rest.split(":")[0], rest.split(":")[1]);
+                    break;
+                case "server":
+                    startServer(rest);
                     break;
             }
         }
