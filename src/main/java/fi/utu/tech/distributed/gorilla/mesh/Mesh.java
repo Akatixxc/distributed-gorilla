@@ -1,5 +1,7 @@
 package fi.utu.tech.distributed.gorilla.mesh;
 
+import fi.utu.tech.distributed.gorilla.logic.ChatMessage;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -78,7 +80,7 @@ public class Mesh extends Thread{
 
                 try {
                     while (true) {
-                        MeshMessage message = (MeshMessage) oIn.readObject();
+                        ChatMessage message = (ChatMessage) oIn.readObject();
                         if (!tokenExists(message.getToken())) {
                             server.broadcast(message);
                             if (!server.tokens.contains(message.getToken())) {
@@ -98,7 +100,7 @@ public class Mesh extends Thread{
             System.out.println("... thread done.");
         }
 
-        public void send(MeshMessage msg) {
+        public void send(ChatMessage msg) {
             try {
                 oOut.writeObject(msg);
                 oOut.flush();
@@ -148,15 +150,10 @@ public class Mesh extends Thread{
      *
      * @param msg Lähetettävä hyötykuorma
      */
-    public synchronized void broadcast(MeshMessage msg){
-        /**if (input.equals("exit")) {
-         clients[findClient(ID)].send("exit");
-         remove(ID);
-         } else {**/
+    public synchronized void broadcast(ChatMessage msg){
         for (int i = 0; i < clientCount; i++) {
             clients[i].send(msg);
         }
-        //}
     }
 
     /**

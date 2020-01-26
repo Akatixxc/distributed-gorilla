@@ -1,7 +1,6 @@
 package fi.utu.tech.distributed.gorilla.logic;
 
 import fi.utu.tech.distributed.gorilla.mesh.Mesh;
-import fi.utu.tech.distributed.gorilla.mesh.MeshMessage;
 import fi.utu.tech.distributed.gorilla.views.MainCanvas;
 import fi.utu.tech.distributed.gorilla.views.Views;
 import fi.utu.tech.oomkit.app.AppConfiguration;
@@ -12,9 +11,6 @@ import fi.utu.tech.oomkit.windows.Window;
 import javafx.application.Platform;
 
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.SocketAddress;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -294,7 +290,7 @@ public class GorillaMultiplayerLogic implements GraphicalAppLogic {
      * Handles message sending. Usually fired by "say" command
      * @param msg Chat message object containing the message and other information
      */
-    protected void handleChatMessage(MeshMessage msg) {
+    protected void handleChatMessage(ChatMessage msg) {
         server.broadcast(msg);
     }
 
@@ -345,7 +341,7 @@ public class GorillaMultiplayerLogic implements GraphicalAppLogic {
                 case "s":
                 case "chat":
                 case "say":
-                    handleChatMessage(new MeshMessage(myName, rest));
+                    handleChatMessage(new ChatMessage(myName, "all", rest));
                     break;
                 case "a":
                 case "k":
