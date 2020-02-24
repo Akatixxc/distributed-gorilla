@@ -212,6 +212,14 @@ public class GorillaMultiplayerLogic implements GraphicalAppLogic {
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         }
+        if (server != null) {
+            if (!server.messages.isEmpty()) {
+                for (String message : server.messages) {
+                    System.out.println(message);
+                }
+                server.messages.clear();
+            }
+        }
         toggleGameMode();
         views.redraw();
     }
@@ -323,7 +331,7 @@ public class GorillaMultiplayerLogic implements GraphicalAppLogic {
      * Parses the game command prompt and fires appropriate handlers
      * @param cmd Unparsed command to be parsed
      */
-    private void parseCommandLine(String cmd) throws IOException, ClassNotFoundException {
+    private void parseCommandLine(String cmd) throws IOException {
         if (cmd.contains(" ")) {
             String rest = cmd.substring(cmd.split(" ")[0].length() + 1);
             switch (cmd.split(" ")[0]) {

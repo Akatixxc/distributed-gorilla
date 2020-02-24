@@ -7,13 +7,16 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class Mesh extends Thread{
     private ServerSocket serverSocket;
     private Thread thread;
     private MeshHandler clients[] = new MeshHandler[50];
     private int clientCount = 0;
-    private ArrayList<Long> tokens;
+    private List<Long> tokens;
+    public List<String> messages;
     /**
      * Luo Mesh-palvelininstanssi
      *
@@ -21,7 +24,8 @@ public class Mesh extends Thread{
      */
     public Mesh(int port) throws IOException {
         serverSocket = new ServerSocket(port);
-        this.tokens = new ArrayList<>();
+        this.tokens = Collections.synchronizedList(new ArrayList<>());
+        this.messages = Collections.synchronizedList(new ArrayList<>());
         this.thread = new Thread(this);
         this.thread.start();
     }
@@ -53,7 +57,7 @@ public class Mesh extends Thread{
         private Mesh server;
         private Socket client;
         private SocketAddress ID;
-        private ArrayList<Long> tokens;
+        //private ArrayList<Long> tokens;
 
         InputStream iS;
         OutputStream oS;
@@ -66,7 +70,7 @@ public class Mesh extends Thread{
             this.server = server;
             this.client = clientSocket;
             this.ID = client.getRemoteSocketAddress();
-            this.tokens = new ArrayList<>();
+            //this.tokens = new ArrayList<>();
         }
 
         public void run() {
@@ -84,10 +88,9 @@ public class Mesh extends Thread{
                         if (!tokenExists(message.getToken())) {
                             server.broadcast(message);
                             if (!server.tokens.contains(message.getToken())) {
-                                System.out.println(message.toString());
+                                server.messages.add(message.toString());
                                 server.tokens.add(message.getToken());
                             }
-
                             addToken(message.getToken());
                         }
                     }
@@ -100,7 +103,7 @@ public class Mesh extends Thread{
             System.out.println("... thread done.");
         }
 
-        public void send(ChatMessage msg) {
+        public void send(Serializable msg) {
             try {
                 oOut.writeObject(msg);
                 oOut.flush();
@@ -124,7 +127,7 @@ public class Mesh extends Thread{
          * @param token Viestitunniste
          */
         private void addToken(long token) {
-            tokens.add(token);
+            server.tokens.add(token);
         }
 
         /**
@@ -135,7 +138,7 @@ public class Mesh extends Thread{
          * @param token Viestitunniste
          */
         private boolean tokenExists(long token) {
-            return tokens.contains(token);
+            return server.tokens.contains(token);
         }
 
         public void close() throws IOException {
