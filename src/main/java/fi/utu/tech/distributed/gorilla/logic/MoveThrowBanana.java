@@ -1,9 +1,11 @@
 package fi.utu.tech.distributed.gorilla.logic;
 
+import java.io.Serializable;
+
 /**
  * TODO: make compatible with network play
  */
-public final class MoveThrowBanana extends Move {
+public final class MoveThrowBanana extends Move implements Serializable {
     /**
      * Angle: -45° <= angle <= 225°. Double.NaN = not set
      */

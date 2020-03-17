@@ -1,6 +1,7 @@
 package fi.utu.tech.distributed.gorilla.logic;
 
 import fi.utu.tech.distributed.gorilla.mesh.Mesh;
+import fi.utu.tech.distributed.gorilla.mesh.MeshMessage;
 import fi.utu.tech.distributed.gorilla.views.MainCanvas;
 import fi.utu.tech.distributed.gorilla.views.Views;
 import fi.utu.tech.oomkit.app.AppConfiguration;
@@ -11,10 +12,7 @@ import fi.utu.tech.oomkit.windows.Window;
 import javafx.application.Platform;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
@@ -34,6 +32,9 @@ public class GorillaMultiplayerLogic implements GraphicalAppLogic {
     protected final int maxPlayers = 2;
 
     private Mesh server;
+    private boolean isHost = false;
+    private Map<Long, String> playerIdNames = new HashMap<>();
+    private Map<Long, Player> playerIDplayer = new HashMap<>();
 
     // in case the game runs too slow:
 
@@ -213,15 +214,57 @@ public class GorillaMultiplayerLogic implements GraphicalAppLogic {
             e.printStackTrace();
         }
         if (server != null) {
-            if (!server.messages.isEmpty()) {
-                for (String message : server.messages) {
-                    System.out.println(message);
-                }
-                server.messages.clear();
+            MeshMessage mm = server.messages.poll();
+            if (mm != null) {
+                parseMessage(mm);
             }
         }
         toggleGameMode();
         views.redraw();
+    }
+
+    public void parseMessage(MeshMessage mm) {
+        if (mm.payload instanceof ChatMessage) {
+            System.out.println(mm.payload);
+        } else if (mm.payload instanceof Command) {
+            Command cmd = (Command) mm.payload;
+            if (cmd == Command.HOSTING) {
+                server.broadcast(Command.JOINING);
+            } else if (cmd == Command.JOINING && isHost){
+                joinInstance(mm);
+            }
+        } else if (mm.payload instanceof GameConfiguration){
+            initMultiplayer((GameConfiguration) mm.payload);
+        } else if (mm.payload instanceof MoveThrowBanana){
+            playerIDplayer.get(mm.sender).moves.add((MoveThrowBanana) mm.payload);
+        }
+    }
+
+    public void joinInstance(MeshMessage mm) {
+        playerIdNames.put(mm.sender, Long.toString(mm.sender));
+        if (playerIdNames.size() == 2) {
+            GameConfiguration gc = new GameConfiguration(gameSeed, getCanvas().getHeight(), playerIdNames);
+            server.broadcast(gc);
+            initMultiplayer(gc);
+        }
+    }
+
+    public void initMultiplayer (GameConfiguration gc) {
+        ArrayList<Long> playerIds = new ArrayList<>(gc.playerIdNames.keySet());
+        Collections.sort(playerIds);
+        ArrayList<Player> players = new ArrayList<>();
+        Player me = null;
+        for (long playerId : playerIds){
+            Player p = new Player(gc.playerIdNames.get(playerId), new LinkedBlockingQueue<Move>(), playerId==server.meshId);
+            if (playerId == server.meshId) {
+                me = p;
+            }
+            players.add(p);
+            playerIDplayer.put(playerId, p);
+        }
+        this.gameState = new GameState(gc, players, me);
+        views.setGameState(gameState);
+        setMode(GameMode.Game);
     }
 
     /**
@@ -299,6 +342,7 @@ public class GorillaMultiplayerLogic implements GraphicalAppLogic {
      * @param msg Chat message object containing the message and other information
      */
     protected void handleChatMessage(ChatMessage msg) {
+        System.out.println(msg);
         server.broadcast(msg);
     }
 
@@ -307,7 +351,9 @@ public class GorillaMultiplayerLogic implements GraphicalAppLogic {
      * Palvelinyhteys in game menu
      */
     protected void handleMultiplayer() {
-        System.out.println("Not implemented on this logic");
+        isHost = true;
+        playerIdNames.put(server.meshId, Long.toString(server.meshId));
+        server.broadcast(Command.HOSTING);
     }
 
     /**
@@ -316,6 +362,7 @@ public class GorillaMultiplayerLogic implements GraphicalAppLogic {
      */
     protected void handleThrowBanana(MoveThrowBanana mtb) {
         gameState.addLocalPlayerMove(mtb);
+        server.broadcast(mtb);
     }
 
     /**

@@ -1,6 +1,5 @@
 package fi.utu.tech.distributed.gorilla.mesh;
 
-import fi.utu.tech.distributed.gorilla.logic.ChatMessage;
 
 import java.io.*;
 import java.net.ServerSocket;
@@ -9,6 +8,7 @@ import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class Mesh extends Thread{
     private ServerSocket serverSocket;
@@ -16,7 +16,8 @@ public class Mesh extends Thread{
     private MeshHandler clients[] = new MeshHandler[50];
     private int clientCount = 0;
     private List<Long> tokens;
-    public List<String> messages;
+    public LinkedBlockingQueue<MeshMessage> messages;
+    public long meshId;
     /**
      * Luo Mesh-palvelininstanssi
      *
@@ -24,8 +25,9 @@ public class Mesh extends Thread{
      */
     public Mesh(int port) throws IOException {
         serverSocket = new ServerSocket(port);
+        this.meshId = 1000000000L + (long) (Math.random() * 9000000000L);
         this.tokens = Collections.synchronizedList(new ArrayList<>());
-        this.messages = Collections.synchronizedList(new ArrayList<>());
+        this.messages = new LinkedBlockingQueue<>(50);
         this.thread = new Thread(this);
         this.thread.start();
     }
@@ -53,7 +55,7 @@ public class Mesh extends Thread{
         }
     }
 
-    private static class MeshHandler extends Thread {
+    private class MeshHandler extends Thread {
         private Mesh server;
         private Socket client;
         private SocketAddress ID;
@@ -84,14 +86,11 @@ public class Mesh extends Thread{
 
                 try {
                     while (true) {
-                        ChatMessage message = (ChatMessage) oIn.readObject();
-                        if (!tokenExists(message.getToken())) {
+                        // if message instanceof MeshMessage
+                        MeshMessage message = (MeshMessage) oIn.readObject();
+                        if (!tokenExists(message.token)) {
+                            messages.put(message);
                             server.broadcast(message);
-                            if (!server.tokens.contains(message.getToken())) {
-                                server.messages.add(message.toString());
-                                server.tokens.add(message.getToken());
-                            }
-                            addToken(message.getToken());
                         }
                     }
                 } catch (IOException e) {
@@ -118,17 +117,6 @@ public class Mesh extends Thread{
             return ID;
         }
 
-        /**
-         * Lisää token, eli "viestitunniste"
-         * Käytännössä merkkaa viestin tällä tunnisteella luetuksi
-         * Määreenä private, koska tätä käyttävä luokka on sisäluokka (inner class)
-         * Jos et käytä sisäluokkaa, pitää olla public
-         *
-         * @param token Viestitunniste
-         */
-        private void addToken(long token) {
-            server.tokens.add(token);
-        }
 
         /**
          * Tarkista, onko viestitunniste jo olemassa
@@ -153,10 +141,15 @@ public class Mesh extends Thread{
      *
      * @param msg Lähetettävä hyötykuorma
      */
-    public synchronized void broadcast(ChatMessage msg){
+    public synchronized void broadcast(MeshMessage msg){
+        tokens.add(msg.token);
         for (int i = 0; i < clientCount; i++) {
             clients[i].send(msg);
         }
+    }
+
+    public void broadcast(Serializable msg){
+        this.broadcast(new MeshMessage(msg, this.meshId));
     }
 
     /**
@@ -179,7 +172,7 @@ public class Mesh extends Thread{
         addThreadClient(new Socket(addr, port));
     }
 
-    private void addThreadClient(Socket socket) {
+    private synchronized void addThreadClient(Socket socket) {
         if (clientCount < clients.length) {
             clients[clientCount] = new MeshHandler(this, socket);
             clients[clientCount].start();
